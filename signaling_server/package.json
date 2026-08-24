@@ -1,0 +1,19 @@
+{
+  "name": "signaling_server",
+  "version": "1.0.0",
+  "description": "Local signaling server for MultiCast WebRTC connections",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "keywords": ["webrtc", "signaling", "websocket"],
+  "author": "",
+  "license": "ISC"
+}
