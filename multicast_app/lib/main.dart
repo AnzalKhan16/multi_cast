@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/screens/main_shell_screen.dart';
 
 void main() {
-  runApp(const MultiCastApp());
+  runApp(
+    const ProviderScope(
+      child: MultiCastApp(),
+    ),
+  );
 }
 
 class MultiCastApp extends StatelessWidget {
