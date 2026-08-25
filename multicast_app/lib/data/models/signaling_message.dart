@@ -9,6 +9,8 @@ class SignalingMessageType {
   static const String peerLeft = 'PEER_LEFT';
   static const String disconnect = 'DISCONNECT';
   static const String error = 'ERROR';
+  static const String ping = 'PING';
+  static const String pong = 'PONG';
 }
 
 class SignalingMessage {

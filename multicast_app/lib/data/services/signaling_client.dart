@@ -6,6 +6,11 @@ class SignalingClient {
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
   
+  Timer? _heartbeatTimer;
+  Timer? _pongTimeoutTimer;
+  static const Duration _heartbeatInterval = Duration(seconds: 10);
+  static const Duration _pongTimeout = Duration(seconds: 5);
+
   final _messageController = StreamController<SignalingMessage>.broadcast();
   Stream<SignalingMessage> get messageStream => _messageController.stream;
 
@@ -24,6 +29,17 @@ class SignalingClient {
         (data) {
           try {
             final message = SignalingMessage.fromJson(data);
+            
+            // Handle Heartbeats
+            if (message.type == SignalingMessageType.pong) {
+              _pongTimeoutTimer?.cancel();
+              return;
+            }
+            if (message.type == SignalingMessageType.ping) {
+              _sendMessage(SignalingMessage(type: SignalingMessageType.pong));
+              return;
+            }
+
             _messageController.add(message);
           } catch (e) {
             print('Failed to parse signaling message: $e');
@@ -43,10 +59,30 @@ class SignalingClient {
         },
       );
       print('Connected to signaling server at $serverUrl');
+      _startHeartbeat();
     } catch (e) {
       print('Failed to connect to signaling server: $e');
       rethrow;
     }
+  }
+
+  void _startHeartbeat() {
+    _stopHeartbeat();
+    _heartbeatTimer = Timer.periodic(_heartbeatInterval, (_) {
+      _sendMessage(SignalingMessage(type: SignalingMessageType.ping));
+      
+      _pongTimeoutTimer = Timer(_pongTimeout, () {
+        print('Pong timeout! Connection lost over local Wi-Fi.');
+        disconnect();
+      });
+    });
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _pongTimeoutTimer?.cancel();
+    _pongTimeoutTimer = null;
   }
 
   /// Announces this peer to a specific room on the signaling server.
@@ -99,6 +135,7 @@ class SignalingClient {
 
   /// Gracefully closes socket sinks and cleans up active subscriptions.
   void disconnect() {
+    _stopHeartbeat();
     _subscription?.cancel();
     _subscription = null;
     
