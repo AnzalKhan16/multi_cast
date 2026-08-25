@@ -1,5 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/peer_device.dart';
+import '../../data/services/network_info_service.dart';
+import '../../data/services/mdns_broadcast_service.dart';
+import '../../data/services/mdns_discovery_service.dart';
+
+final networkInfoServiceProvider = Provider((ref) => NetworkInfoService());
+final mdnsBroadcastServiceProvider = Provider((ref) => MdnsBroadcastService());
 
 class DiscoveryState {
   final String? localIp;
@@ -31,17 +37,57 @@ class DiscoveryState {
 }
 
 class DiscoveryController extends StateNotifier<DiscoveryState> {
-  DiscoveryController() : super(DiscoveryState());
+  final Ref _ref;
+  MdnsDiscoveryService? _discoveryService;
+
+  DiscoveryController(this._ref) : super(DiscoveryState()) {
+    _initNetwork();
+  }
+
+  Future<void> _initNetwork() async {
+    final ip = await _ref.read(networkInfoServiceProvider).getLocalIpAddress();
+    if (ip != null) {
+      setLocalIp(ip);
+    }
+  }
+
+  @override
+  void dispose() {
+    stopDiscovery();
+    super.dispose();
+  }
 
   void setLocalIp(String ip) {
     state = state.copyWith(localIp: ip);
   }
 
-  void startDiscovery() {
+  Future<void> startDiscovery() async {
     state = state.copyWith(isDiscovering: true, clearError: true);
+    
+    try {
+      // Typically, deviceName is fetched from preferences or device_info_plus.
+      // We use a fallback name for now.
+      await _ref.read(mdnsBroadcastServiceProvider).startBroadcasting(
+        deviceName: 'MultiCast Device',
+        deviceType: 'unknown',
+        signalingPort: 8080,
+      );
+    } catch (e) {
+      print('Broadcast failed to start: $e');
+    }
+
+    _discoveryService ??= MdnsDiscoveryService(
+      onPeerFound: addPeer,
+      onPeerLost: removePeer,
+      onError: setError,
+    );
+
+    await _discoveryService?.startDiscovery();
   }
 
-  void stopDiscovery() {
+  Future<void> stopDiscovery() async {
+    await _ref.read(mdnsBroadcastServiceProvider).stopBroadcasting();
+    await _discoveryService?.stopDiscovery();
     state = state.copyWith(isDiscovering: false);
   }
 
@@ -50,6 +96,8 @@ class DiscoveryController extends StateNotifier<DiscoveryState> {
       state = state.copyWith(
         discoveredPeers: [...state.discoveredPeers, peer],
       );
+    } else {
+      updatePeer(peer);
     }
   }
 
@@ -78,5 +126,5 @@ class DiscoveryController extends StateNotifier<DiscoveryState> {
 }
 
 final discoveryProvider = StateNotifierProvider<DiscoveryController, DiscoveryState>((ref) {
-  return DiscoveryController();
+  return DiscoveryController(ref);
 });
