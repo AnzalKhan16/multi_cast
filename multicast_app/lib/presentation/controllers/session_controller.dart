@@ -18,22 +18,26 @@ class StreamMetrics {
   final double fps;
   final double bitrate;
   final double packetLoss;
+  final double latency;
 
   StreamMetrics({
     this.fps = 0.0,
     this.bitrate = 0.0,
     this.packetLoss = 0.0,
+    this.latency = 0.0,
   });
 
   StreamMetrics copyWith({
     double? fps,
     double? bitrate,
     double? packetLoss,
+    double? latency,
   }) {
     return StreamMetrics(
       fps: fps ?? this.fps,
       bitrate: bitrate ?? this.bitrate,
       packetLoss: packetLoss ?? this.packetLoss,
+      latency: latency ?? this.latency,
     );
   }
 }
@@ -239,12 +243,13 @@ class SessionController extends StateNotifier<SessionState> {
     );
   }
 
-  void updateMetrics({double? fps, double? bitrate, double? packetLoss}) {
+  void updateMetrics({double? fps, double? bitrate, double? packetLoss, double? latency}) {
     state = state.copyWith(
       metrics: state.metrics.copyWith(
         fps: fps,
         bitrate: bitrate,
         packetLoss: packetLoss,
+        latency: latency,
       ),
     );
   }
