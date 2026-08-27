@@ -44,6 +44,8 @@ class SessionState {
   final PeerDevice? remotePeer;
   final StreamMetrics metrics;
   final List<String> errorLogs;
+  final String? localPeerId;
+  final String? roomId;
 
   SessionState({
     this.role = StreamRole.none,
@@ -51,6 +53,8 @@ class SessionState {
     this.remotePeer,
     StreamMetrics? metrics,
     this.errorLogs = const [],
+    this.localPeerId,
+    this.roomId,
   }) : metrics = metrics ?? StreamMetrics();
 
   SessionState copyWith({
@@ -59,6 +63,8 @@ class SessionState {
     PeerDevice? remotePeer,
     StreamMetrics? metrics,
     List<String>? errorLogs,
+    String? localPeerId,
+    String? roomId,
   }) {
     return SessionState(
       role: role ?? this.role,
@@ -66,6 +72,8 @@ class SessionState {
       remotePeer: remotePeer ?? this.remotePeer,
       metrics: metrics ?? this.metrics,
       errorLogs: errorLogs ?? this.errorLogs,
+      localPeerId: localPeerId ?? this.localPeerId,
+      roomId: roomId ?? this.roomId,
     );
   }
 }
@@ -76,8 +84,25 @@ class SessionController extends StateNotifier<SessionState> {
   StreamSubscription<RTCPeerConnectionState>? _webrtcStateSubscription;
 
   SessionController(this._ref) : super(SessionState()) {
-    _webrtcStateSubscription = _ref.read(webrtcPeerConnectionManagerProvider).onConnectionState.listen((rtcState) {
+    final webrtcManager = _ref.read(webrtcPeerConnectionManagerProvider);
+    _webrtcStateSubscription = webrtcManager.onConnectionState.listen((rtcState) {
       _handleWebRTCConnectionState(rtcState);
+    });
+
+    // Listen to local ICE candidates and route them to signaling server
+    webrtcManager.onLocalIceCandidate.listen((candidate) {
+      final client = _ref.read(signalingClientProvider);
+      if (state.remotePeer != null && state.localPeerId != null) {
+        client.sendCandidate(
+          state.remotePeer!.id, 
+          {
+            'candidate': candidate.candidate,
+            'sdpMid': candidate.sdpMid,
+            'sdpMLineIndex': candidate.sdpMLineIndex,
+          },
+          state.localPeerId!,
+        );
+      }
     });
   }
 
@@ -110,6 +135,8 @@ class SessionController extends StateNotifier<SessionState> {
       role: role,
       connectionState: AppConnectionState.connecting,
       errorLogs: [],
+      localPeerId: localPeerId,
+      roomId: roomId,
     );
 
     if (serverUrl != null && roomId != null && localPeerId != null) {
@@ -135,14 +162,74 @@ class SessionController extends StateNotifier<SessionState> {
     }
   }
 
-  void _handleSignalingMessage(SignalingMessage message) {
-    if (message.type == SignalingMessageType.error) {
-      logError(message.errorMessage ?? 'Unknown signaling error');
-    } else if (message.type == SignalingMessageType.disconnect || message.type == SignalingMessageType.peerLeft) {
-      logError('Peer disconnected.');
-      terminateSession();
+  /// Starts the call (Sender Flow) by creating and sending an SDP offer
+  Future<void> startCall(PeerDevice targetPeer) async {
+    bindRemotePeer(targetPeer);
+    
+    final webrtcManager = _ref.read(webrtcPeerConnectionManagerProvider);
+    final offer = await webrtcManager.createOffer();
+    
+    if (offer != null && state.localPeerId != null) {
+      _ref.read(signalingClientProvider).sendOffer(targetPeer.id, {'sdp': offer.sdp, 'type': offer.type}, state.localPeerId!);
+    } else {
+      logError('Failed to create offer or localPeerId is null.');
     }
-    // Note: OFFER, ANSWER, ICE_CANDIDATE handling will be implemented directly in the WebRTC controllers.
+  }
+
+  void _handleSignalingMessage(SignalingMessage message) async {
+    final webrtcManager = _ref.read(webrtcPeerConnectionManagerProvider);
+
+    switch (message.type) {
+      case SignalingMessageType.error:
+        logError(message.errorMessage ?? 'Unknown signaling error');
+        break;
+      case SignalingMessageType.disconnect:
+      case SignalingMessageType.peerLeft:
+        logError('Peer disconnected.');
+        terminateSession();
+        break;
+      case SignalingMessageType.offer:
+        if (message.sdp != null && message.senderPeerId != null) {
+          // Bind the remote peer if not bound
+          if (state.remotePeer == null) {
+             bindRemotePeer(PeerDevice(
+               id: message.senderPeerId!,
+               name: 'Unknown Sender',
+               ipAddress: 'Unknown',
+               deviceType: DeviceType.unknown,
+             ));
+          }
+
+          await webrtcManager.handleRemoteOffer(message.sdp!);
+          final answer = await webrtcManager.createAnswer();
+          
+          if (answer != null && state.localPeerId != null) {
+            _ref.read(signalingClientProvider).sendAnswer(
+              message.senderPeerId!, 
+              {'sdp': answer.sdp, 'type': answer.type}, 
+              state.localPeerId!
+            );
+          }
+        }
+        break;
+      case SignalingMessageType.answer:
+        if (message.sdp != null) {
+          await webrtcManager.handleRemoteAnswer(message.sdp!);
+        }
+        break;
+      case SignalingMessageType.iceCandidate:
+        if (message.candidate != null) {
+          final rtcCandidate = RTCIceCandidate(
+            message.candidate!['candidate'],
+            message.candidate!['sdpMid'],
+            message.candidate!['sdpMLineIndex'],
+          );
+          await webrtcManager.addRemoteIceCandidate(rtcCandidate);
+        }
+        break;
+      default:
+        break;
+    }
   }
 
   void bindRemotePeer(PeerDevice peer) {
