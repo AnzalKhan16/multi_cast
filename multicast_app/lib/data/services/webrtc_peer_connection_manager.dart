@@ -19,11 +19,21 @@ class WebrtcPeerConnectionManager {
   final StreamController<RTCPeerConnectionState> _connectionStateController = StreamController<RTCPeerConnectionState>.broadcast();
   Stream<RTCPeerConnectionState> get onConnectionState => _connectionStateController.stream;
 
+  /// Stream controller for remote MediaStream (incoming video/audio)
+  final StreamController<MediaStream> _remoteStreamController = StreamController<MediaStream>.broadcast();
+  Stream<MediaStream> get onRemoteStream => _remoteStreamController.stream;
+
   Future<void> initializePeerConnection() async {
     _peerConnection = await createPeerConnection(WebRTCConfig.defaultConfiguration);
 
     _peerConnection!.onIceCandidate = (RTCIceCandidate candidate) {
       _localIceCandidateController.add(candidate);
+    };
+
+    _peerConnection!.onTrack = (RTCTrackEvent event) {
+      if (event.streams.isNotEmpty) {
+        _remoteStreamController.add(event.streams.first);
+      }
     };
 
     _peerConnection!.onConnectionState = (RTCPeerConnectionState state) {
@@ -131,9 +141,20 @@ class WebrtcPeerConnectionManager {
     }
   }
 
+  /// Adds local video and audio tracks from a MediaStream to the RTCPeerConnection
+  Future<void> addLocalStream(MediaStream stream) async {
+    if (_peerConnection == null) return;
+    
+    // Add all tracks from the local stream to the peer connection
+    for (var track in stream.getTracks()) {
+      await _peerConnection!.addTrack(track, stream);
+    }
+  }
+
   Future<void> dispose() async {
     await _localIceCandidateController.close();
     await _connectionStateController.close();
+    await _remoteStreamController.close();
     
     if (_peerConnection != null) {
       final senders = await _peerConnection!.getSenders();
