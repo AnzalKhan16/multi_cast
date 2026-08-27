@@ -5,6 +5,8 @@ import '../../core/enums/connection_state.dart';
 import '../../data/models/peer_device.dart';
 import '../../data/models/signaling_message.dart';
 import '../../data/services/signaling_client.dart';
+import '../../data/services/webrtc_peer_connection_manager.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 final signalingClientProvider = Provider((ref) {
   final client = SignalingClient();
@@ -71,8 +73,37 @@ class SessionState {
 class SessionController extends StateNotifier<SessionState> {
   final Ref _ref;
   StreamSubscription<SignalingMessage>? _signalingSubscription;
+  StreamSubscription<RTCPeerConnectionState>? _webrtcStateSubscription;
 
-  SessionController(this._ref) : super(SessionState());
+  SessionController(this._ref) : super(SessionState()) {
+    _webrtcStateSubscription = _ref.read(webrtcPeerConnectionManagerProvider).onConnectionState.listen((rtcState) {
+      _handleWebRTCConnectionState(rtcState);
+    });
+  }
+
+  void _handleWebRTCConnectionState(RTCPeerConnectionState rtcState) {
+    AppConnectionState newState = state.connectionState;
+    switch (rtcState) {
+      case RTCPeerConnectionState.RTCPeerConnectionStateNew:
+      case RTCPeerConnectionState.RTCPeerConnectionStateConnecting:
+        newState = AppConnectionState.connecting;
+        break;
+      case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
+        newState = AppConnectionState.connected;
+        break;
+      case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
+      case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
+        newState = AppConnectionState.disconnected;
+        break;
+      case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
+        newState = AppConnectionState.error;
+        break;
+    }
+    
+    if (state.connectionState != newState) {
+      state = state.copyWith(connectionState: newState);
+    }
+  }
 
   void initializeSession(StreamRole role, {String? serverUrl, String? roomId, String? localPeerId}) {
     state = state.copyWith(
@@ -147,6 +178,7 @@ class SessionController extends StateNotifier<SessionState> {
   @override
   void dispose() {
     _signalingSubscription?.cancel();
+    _webrtcStateSubscription?.cancel();
     super.dispose();
   }
 }
