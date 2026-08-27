@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/webrtc_config.dart';
+import '../../core/utils/sdp_utils.dart';
 
 class WebrtcPeerConnectionManager {
   RTCPeerConnection? _peerConnection;
@@ -55,6 +56,70 @@ class WebrtcPeerConnectionManager {
       await _peerConnection!.addCandidate(candidate);
     }
     _remoteIceCandidateQueue.clear();
+  }
+
+  /// Creates an offer to start the session (Sender Flow)
+  Future<RTCSessionDescription?> createOffer() async {
+    if (_peerConnection == null) return null;
+
+    final constraints = {
+      'mandatory': {
+        'OfferToReceiveAudio': false, // Senders cast, they don't receive
+        'OfferToReceiveVideo': false,
+      },
+    };
+
+    RTCSessionDescription offer = await _peerConnection!.createOffer(constraints);
+    
+    // Apply SDP munging for H.264 prioritization and bitrate control
+    String optimizedSdp = SdpUtils.optimizeSdp(offer.sdp!);
+    RTCSessionDescription optimizedOffer = RTCSessionDescription(optimizedSdp, offer.type);
+
+    await _peerConnection!.setLocalDescription(optimizedOffer);
+    
+    return optimizedOffer;
+  }
+
+  /// Handles the remote answer from the receiver to complete handshake
+  Future<void> handleRemoteAnswer(Map<String, dynamic> answerSdp) async {
+    if (_peerConnection == null) return;
+    
+    RTCSessionDescription answer = RTCSessionDescription(
+      answerSdp['sdp'],
+      answerSdp['type'],
+    );
+    
+    await setRemoteDescription(answer);
+  }
+
+  /// Handles the remote offer from the sender and prepares the receiver (Receiver Flow)
+  Future<void> handleRemoteOffer(Map<String, dynamic> offerSdp) async {
+    if (_peerConnection == null) return;
+
+    RTCSessionDescription offer = RTCSessionDescription(
+      offerSdp['sdp'],
+      offerSdp['type'],
+    );
+
+    // This also flushes any queued ICE candidates automatically
+    await setRemoteDescription(offer);
+  }
+
+  /// Creates an answer to accept the session (Receiver Flow)
+  Future<RTCSessionDescription?> createAnswer() async {
+    if (_peerConnection == null) return null;
+
+    final constraints = {
+      'mandatory': {
+        'OfferToReceiveAudio': true, // Receivers must accept audio and video
+        'OfferToReceiveVideo': true,
+      },
+    };
+
+    RTCSessionDescription answer = await _peerConnection!.createAnswer(constraints);
+    await _peerConnection!.setLocalDescription(answer);
+    
+    return answer;
   }
 
   /// Adds a remote ICE candidate. Queues it if remote description is not yet set.
