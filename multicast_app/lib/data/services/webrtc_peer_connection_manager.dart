@@ -5,6 +5,10 @@ import '../../core/constants/webrtc_config.dart';
 class WebrtcPeerConnectionManager {
   RTCPeerConnection? _peerConnection;
   
+  /// Queue for early ICE candidates received before remote description is set
+  final List<RTCIceCandidate> _remoteIceCandidateQueue = [];
+  bool _isRemoteDescriptionSet = false;
+  
   /// Stream controller for local ICE candidates to be sent to signaling server
   final StreamController<RTCIceCandidate> _localIceCandidateController = StreamController<RTCIceCandidate>.broadcast();
   Stream<RTCIceCandidate> get onLocalIceCandidate => _localIceCandidateController.stream;
@@ -37,6 +41,29 @@ class WebrtcPeerConnectionManager {
   }
   
   RTCPeerConnection? get peerConnection => _peerConnection;
+
+  /// Sets the remote description and processes any queued ICE candidates
+  Future<void> setRemoteDescription(RTCSessionDescription description) async {
+    if (_peerConnection == null) return;
+    
+    await _peerConnection!.setRemoteDescription(description);
+    _isRemoteDescriptionSet = true;
+    
+    // Flush queued ICE candidates
+    for (var candidate in _remoteIceCandidateQueue) {
+      await _peerConnection!.addCandidate(candidate);
+    }
+    _remoteIceCandidateQueue.clear();
+  }
+
+  /// Adds a remote ICE candidate. Queues it if remote description is not yet set.
+  Future<void> addRemoteIceCandidate(RTCIceCandidate candidate) async {
+    if (_isRemoteDescriptionSet && _peerConnection != null) {
+      await _peerConnection!.addCandidate(candidate);
+    } else {
+      _remoteIceCandidateQueue.add(candidate);
+    }
+  }
 
   Future<void> dispose() async {
     await _localIceCandidateController.close();
