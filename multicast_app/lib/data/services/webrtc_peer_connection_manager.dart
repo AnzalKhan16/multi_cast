@@ -92,6 +92,36 @@ class WebrtcPeerConnectionManager {
     await setRemoteDescription(answer);
   }
 
+  /// Handles the remote offer from the sender and prepares the receiver (Receiver Flow)
+  Future<void> handleRemoteOffer(Map<String, dynamic> offerSdp) async {
+    if (_peerConnection == null) return;
+
+    RTCSessionDescription offer = RTCSessionDescription(
+      offerSdp['sdp'],
+      offerSdp['type'],
+    );
+
+    // This also flushes any queued ICE candidates automatically
+    await setRemoteDescription(offer);
+  }
+
+  /// Creates an answer to accept the session (Receiver Flow)
+  Future<RTCSessionDescription?> createAnswer() async {
+    if (_peerConnection == null) return null;
+
+    final constraints = {
+      'mandatory': {
+        'OfferToReceiveAudio': true, // Receivers must accept audio and video
+        'OfferToReceiveVideo': true,
+      },
+    };
+
+    RTCSessionDescription answer = await _peerConnection!.createAnswer(constraints);
+    await _peerConnection!.setLocalDescription(answer);
+    
+    return answer;
+  }
+
   /// Adds a remote ICE candidate. Queues it if remote description is not yet set.
   Future<void> addRemoteIceCandidate(RTCIceCandidate candidate) async {
     if (_isRemoteDescriptionSet && _peerConnection != null) {
