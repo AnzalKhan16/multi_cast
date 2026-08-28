@@ -23,6 +23,28 @@ class DesktopCaptureService {
       );
     }).toList();
   }
+
+  Future<MediaStream> startCapture(CaptureSource source, {int fps = 60, int maxBitrate = 8000000}) async {
+    final Map<String, dynamic> mediaConstraints = {
+      'audio': false, // Audio loopback usually requires separate handling on Windows
+      'video': {
+        'mandatory': {
+          'chromeMediaSource': 'desktop',
+          'chromeMediaSourceId': source.id,
+          'minFrameRate': fps,
+          'maxFrameRate': fps,
+        }
+      }
+    };
+
+    try {
+      final stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
+      return stream;
+    } catch (e) {
+      print('Error starting desktop capture: $e');
+      rethrow;
+    }
+  }
 }
 
 final desktopCaptureServiceProvider = Provider<DesktopCaptureService>((ref) {
