@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/enums/stream_role.dart';
 import '../../core/enums/connection_state.dart';
 import '../../data/models/peer_device.dart';
+import '../../data/models/capture_source.dart';
 import '../../data/models/signaling_message.dart';
 import '../../data/services/signaling_client.dart';
 import '../../data/services/webrtc_peer_connection_manager.dart';
+import '../../data/services/desktop_capture_service.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 final signalingClientProvider = Provider((ref) {
@@ -167,10 +169,23 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   /// Starts the call (Sender Flow) by creating and sending an SDP offer
-  Future<void> startCall(PeerDevice targetPeer) async {
+  Future<void> startCall(PeerDevice targetPeer, {CaptureSource? source}) async {
     bindRemotePeer(targetPeer);
     
     final webrtcManager = _ref.read(webrtcPeerConnectionManagerProvider);
+    
+    // If a source is provided, start capture and add it to the WebRTC connection
+    if (source != null) {
+      try {
+        final captureService = _ref.read(desktopCaptureServiceProvider);
+        final localStream = await captureService.startCapture(source);
+        await webrtcManager.addLocalStream(localStream);
+      } catch (e) {
+        logError('Failed to capture desktop stream: $e');
+        return;
+      }
+    }
+
     final offer = await webrtcManager.createOffer();
     
     if (offer != null && state.localPeerId != null) {
