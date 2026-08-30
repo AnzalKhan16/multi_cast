@@ -2,8 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../models/capture_source.dart';
 import 'package:flutter/services.dart';
+import 'base_desktop_capturer.dart';
 
-class MacOsCaptureService {
+class MacOsCaptureService implements BaseDesktopCapturer {
   static const MethodChannel _channel = MethodChannel('multicast/macos_permissions');
 
   /// Checks if the app has screen recording permissions on macOS
@@ -35,6 +36,7 @@ class MacOsCaptureService {
     }
   }
 
+  @override
   Future<List<CaptureSource>> getAvailableSources({bool includeWindows = true}) async {
     // macOS requires permissions before getting sources.
     final hasPermission = await checkScreenCapturePermission();
@@ -62,6 +64,7 @@ class MacOsCaptureService {
     }).toList();
   }
 
+  @override
   Future<MediaStream> startCapture(CaptureSource source, {int fps = 60}) async {
     // macOS-specific media constraints
     final Map<String, dynamic> mediaConstraints = {
