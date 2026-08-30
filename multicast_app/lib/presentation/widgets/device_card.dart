@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum DeviceType { windows, apple, android, unknown }
+import '../../core/enums/device_type.dart';
 
 class DeviceCard extends StatelessWidget {
   final String deviceName;
@@ -20,7 +20,8 @@ class DeviceCard extends StatelessWidget {
     switch (deviceType) {
       case DeviceType.windows:
         return Icons.window;
-      case DeviceType.apple:
+      case DeviceType.macOS:
+      case DeviceType.iOS:
         return Icons.apple; // Note: Cupertino icons might be better depending on preference
       case DeviceType.android:
         return Icons.android;

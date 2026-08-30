@@ -94,8 +94,8 @@ class MdnsDiscoveryService {
     }
 
     // IP resolution: Bonsoir resolved services typically contain the host IP.
-    // In some versions, 'host' returns the IP string directly.
-    String ipAddress = service.host ?? 'unknown';
+    // In bonsoir 3.0.0, the property is 'ip' instead of 'host'.
+    String ipAddress = service.ip ?? 'unknown';
 
     // Map the string type back to our enum
     DeviceType type = DeviceType.unknown;

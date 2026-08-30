@@ -4,6 +4,7 @@ import '../../core/enums/stream_role.dart';
 import '../../core/enums/connection_state.dart';
 import '../../data/models/peer_device.dart';
 import '../../data/models/capture_source.dart';
+import '../../core/enums/device_type.dart';
 import '../../data/models/signaling_message.dart';
 import '../../data/services/signaling_client.dart';
 import '../../data/services/webrtc_peer_connection_manager.dart';
@@ -216,6 +217,7 @@ class SessionController extends StateNotifier<SessionState> {
                id: message.senderPeerId!,
                name: 'Unknown Sender',
                ipAddress: 'Unknown',
+               port: 0,
                deviceType: DeviceType.unknown,
              ));
           }
