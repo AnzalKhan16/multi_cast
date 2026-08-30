@@ -177,6 +177,7 @@ class SessionController extends StateNotifier<SessionState> {
     // If a source is provided, start capture and add it to the WebRTC connection
     if (source != null) {
       try {
+        // Integrate DesktopCaptureService to acquire stream
         final captureService = _ref.read(desktopCaptureServiceProvider);
         final localStream = await captureService.startCapture(source);
         await webrtcManager.addLocalStream(localStream);
