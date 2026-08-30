@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/capture_source.dart';
-import '../../data/services/desktop_capture_service.dart';
+import '../../data/services/base_desktop_capturer.dart';
 
 class SourceSelectorDialog extends ConsumerStatefulWidget {
   const SourceSelectorDialog({super.key});
@@ -22,7 +22,7 @@ class _SourceSelectorDialogState extends ConsumerState<SourceSelectorDialog> {
 
   Future<void> _loadSources() async {
     try {
-      final service = ref.read(desktopCaptureServiceProvider);
+      final service = ref.read(unifiedDesktopCaptureServiceProvider);
       final sources = await service.getAvailableSources();
       if (mounted) {
         setState(() {
