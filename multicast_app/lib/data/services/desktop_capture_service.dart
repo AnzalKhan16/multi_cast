@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../models/capture_source.dart';
+import 'base_desktop_capturer.dart';
 
-class DesktopCaptureService {
+class DesktopCaptureService implements BaseDesktopCapturer {
+  @override
   Future<List<CaptureSource>> getAvailableSources({bool includeWindows = true}) async {
     final types = [SourceType.Screen];
     if (includeWindows) {
@@ -26,6 +28,7 @@ class DesktopCaptureService {
     }).toList();
   }
 
+  @override
   Future<MediaStream> startCapture(CaptureSource source, {int fps = 60, int maxBitrate = 8000000}) async {
     final Map<String, dynamic> mediaConstraints = {
       'audio': false, // Audio loopback usually requires separate handling on Windows
