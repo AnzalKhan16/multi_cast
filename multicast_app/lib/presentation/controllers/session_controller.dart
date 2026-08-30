@@ -7,7 +7,7 @@ import '../../data/models/capture_source.dart';
 import '../../data/models/signaling_message.dart';
 import '../../data/services/signaling_client.dart';
 import '../../data/services/webrtc_peer_connection_manager.dart';
-import '../../data/services/desktop_capture_service.dart';
+import '../../data/services/base_desktop_capturer.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 final signalingClientProvider = Provider((ref) {
@@ -177,7 +177,8 @@ class SessionController extends StateNotifier<SessionState> {
     // If a source is provided, start capture and add it to the WebRTC connection
     if (source != null) {
       try {
-        final captureService = _ref.read(desktopCaptureServiceProvider);
+        // Integrate Unified DesktopCaptureService to acquire stream
+        final captureService = _ref.read(unifiedDesktopCaptureServiceProvider);
         final localStream = await captureService.startCapture(source);
         await webrtcManager.addLocalStream(localStream);
       } catch (e) {
