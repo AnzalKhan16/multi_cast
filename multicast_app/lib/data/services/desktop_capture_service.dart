@@ -10,7 +10,9 @@ class DesktopCaptureService {
     }
     
     // Request desktop sources using flutter_webrtc's desktopCapturer
-    final sources = await desktopCapturer.getSources(types: types);
+    final sources = await desktopCapturer.getSources(
+      types: types,
+    );
     
     return sources.map((DesktopCapturerSource source) {
       return CaptureSource(
