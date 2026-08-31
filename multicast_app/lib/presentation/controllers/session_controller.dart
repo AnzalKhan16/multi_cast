@@ -7,7 +7,7 @@ import '../../data/models/capture_source.dart';
 import '../../data/models/signaling_message.dart';
 import '../../data/services/signaling_client.dart';
 import '../../data/services/webrtc_peer_connection_manager.dart';
-import '../../data/services/desktop_capture_service.dart';
+import '../../data/services/screen_capture_service.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 final signalingClientProvider = Provider((ref) {
@@ -175,15 +175,14 @@ class SessionController extends StateNotifier<SessionState> {
     final webrtcManager = _ref.read(webrtcPeerConnectionManagerProvider);
     
     // If a source is provided, start capture and add it to the WebRTC connection
-    if (source != null) {
-      try {
-        final captureService = _ref.read(desktopCaptureServiceProvider);
-        final localStream = await captureService.startCapture(source);
-        await webrtcManager.addLocalStream(localStream);
-      } catch (e) {
-        logError('Failed to capture desktop stream: $e');
-        return;
-      }
+    // For desktop we need a source, for mobile/web we just start capture
+    try {
+      final captureService = _ref.read(screenCaptureServiceProvider);
+      final localStream = await captureService.startCapture(source: source);
+      await webrtcManager.addLocalStream(localStream);
+    } catch (e) {
+      logError('Failed to capture screen stream: $e');
+      return;
     }
 
     final offer = await webrtcManager.createOffer();
@@ -279,6 +278,7 @@ class SessionController extends StateNotifier<SessionState> {
   void terminateSession() {
     _signalingSubscription?.cancel();
     _ref.read(signalingClientProvider).disconnect();
+    _ref.read(screenCaptureServiceProvider).stopCapture();
     state = SessionState(role: StreamRole.none, connectionState: AppConnectionState.disconnected);
   }
 

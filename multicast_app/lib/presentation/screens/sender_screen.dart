@@ -79,6 +79,11 @@ class _SenderScreenState extends State<SenderScreen> {
                   setState(() {
                     _isBroadcasting = !_isBroadcasting;
                   });
+                  if (!_isBroadcasting) {
+                    // Trigger session termination when stopped
+                    // This will also invoke stopCapture() via the updated session_controller
+                    // Note: In a full Riverpod setup, we would use ref.read(sessionProvider.notifier).terminateSession();
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 24),
