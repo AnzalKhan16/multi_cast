@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/theme/theme_provider.dart';
 import '../widgets/network_status_bar.dart';
 import '../widgets/device_card.dart';
 import '../controllers/discovery_controller.dart';
@@ -25,11 +26,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final discoveryState = ref.watch(discoveryProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    final isDark = themeMode == ThemeMode.dark;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('MultiCast'),
         actions: [
+          IconButton(
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+            onPressed: () {
+              ref.read(themeModeProvider.notifier).state =
+                  isDark ? ThemeMode.light : ThemeMode.dark;
+            },
+            tooltip: 'Toggle Theme',
+          ),
           if (discoveryState.isDiscovering)
             const Padding(
               padding: EdgeInsets.all(16.0),
