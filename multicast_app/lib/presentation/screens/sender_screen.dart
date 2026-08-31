@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../widgets/telemetry_hud_overlay.dart';
+import '../../presentation/controllers/session_controller.dart';
+import '../../core/enums/stream_role.dart';
 
-class SenderScreen extends StatefulWidget {
+class SenderScreen extends ConsumerStatefulWidget {
   const SenderScreen({super.key});
 
   @override
-  State<SenderScreen> createState() => _SenderScreenState();
+  ConsumerState<SenderScreen> createState() => _SenderScreenState();
 }
 
-class _SenderScreenState extends State<SenderScreen> {
+class _SenderScreenState extends ConsumerState<SenderScreen> {
   bool _isBroadcasting = false;
+  bool _showHud = true;
 
   @override
   Widget build(BuildContext context) {
+    final sessionState = ref.watch(sessionProvider);
+    final telemetry = sessionState.telemetry;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Broadcast Control'),
@@ -52,16 +59,18 @@ class _SenderScreenState extends State<SenderScreen> {
                           ),
                     ),
                     const SizedBox(height: 24),
-                    if (_isBroadcasting) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildStatColumn('FPS', '60'),
-                          _buildStatColumn('Bitrate', '5.2 Mbps'),
-                          _buildStatColumn('Latency', '12 ms'),
-                        ],
+                    if (_isBroadcasting && telemetry != null) ...[
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        icon: Icon(_showHud ? Icons.visibility_off : Icons.visibility),
+                        label: Text(_showHud ? 'Hide Telemetry' : 'Show Telemetry'),
+                        onPressed: () {
+                          setState(() {
+                            _showHud = !_showHud;
+                          });
+                        },
                       ),
-                    ] else ...[
+                    ] else if (!_isBroadcasting) ...[
                       Text(
                         'Ready to start broadcasting your screen to connected peers.',
                         textAlign: TextAlign.center,
@@ -80,9 +89,10 @@ class _SenderScreenState extends State<SenderScreen> {
                     _isBroadcasting = !_isBroadcasting;
                   });
                   if (!_isBroadcasting) {
-                    // Trigger session termination when stopped
-                    // This will also invoke stopCapture() via the updated session_controller
-                    // Note: In a full Riverpod setup, we would use ref.read(sessionProvider.notifier).terminateSession();
+                    ref.read(sessionProvider.notifier).terminateSession();
+                  } else {
+                    // For dummy UI toggle, in a real scenario this starts the call:
+                    // ref.read(sessionProvider.notifier).initializeSession(StreamRole.sender...);
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -100,27 +110,20 @@ class _SenderScreenState extends State<SenderScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatColumn(String label, String value) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
+        
+        // Mount HUD overlay if broadcasting and enabled
+        if (_isBroadcasting && _showHud && telemetry != null)
+          Align(
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 16.0),
+              child: TelemetryHudOverlay(
+                telemetry: telemetry,
               ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
-        ),
+            ),
+          ),
       ],
     );
   }
+
 }

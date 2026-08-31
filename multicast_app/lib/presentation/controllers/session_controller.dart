@@ -9,6 +9,9 @@ import '../../data/models/signaling_message.dart';
 import '../../data/services/signaling_client.dart';
 import '../../data/services/webrtc_peer_connection_manager.dart';
 import '../../data/services/screen_capture_service.dart';
+import '../../data/services/webrtc_stats_collector.dart';
+import '../../core/utils/adaptive_bitrate_controller.dart';
+import '../../data/models/stream_telemetry.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 final signalingClientProvider = Provider((ref) {
@@ -17,39 +20,11 @@ final signalingClientProvider = Provider((ref) {
   return client;
 });
 
-class StreamMetrics {
-  final double fps;
-  final double bitrate;
-  final double packetLoss;
-  final double latency;
-
-  StreamMetrics({
-    this.fps = 0.0,
-    this.bitrate = 0.0,
-    this.packetLoss = 0.0,
-    this.latency = 0.0,
-  });
-
-  StreamMetrics copyWith({
-    double? fps,
-    double? bitrate,
-    double? packetLoss,
-    double? latency,
-  }) {
-    return StreamMetrics(
-      fps: fps ?? this.fps,
-      bitrate: bitrate ?? this.bitrate,
-      packetLoss: packetLoss ?? this.packetLoss,
-      latency: latency ?? this.latency,
-    );
-  }
-}
-
 class SessionState {
   final StreamRole role;
   final AppConnectionState connectionState;
   final PeerDevice? remotePeer;
-  final StreamMetrics metrics;
+  final StreamTelemetry? telemetry;
   final List<String> errorLogs;
   final String? localPeerId;
   final String? roomId;
@@ -58,17 +33,17 @@ class SessionState {
     this.role = StreamRole.none,
     this.connectionState = AppConnectionState.idle,
     this.remotePeer,
-    StreamMetrics? metrics,
+    this.telemetry,
     this.errorLogs = const [],
     this.localPeerId,
     this.roomId,
-  }) : metrics = metrics ?? StreamMetrics();
+  });
 
   SessionState copyWith({
     StreamRole? role,
     AppConnectionState? connectionState,
     PeerDevice? remotePeer,
-    StreamMetrics? metrics,
+    StreamTelemetry? telemetry,
     List<String>? errorLogs,
     String? localPeerId,
     String? roomId,
@@ -77,7 +52,7 @@ class SessionState {
       role: role ?? this.role,
       connectionState: connectionState ?? this.connectionState,
       remotePeer: remotePeer ?? this.remotePeer,
-      metrics: metrics ?? this.metrics,
+      telemetry: telemetry ?? this.telemetry,
       errorLogs: errorLogs ?? this.errorLogs,
       localPeerId: localPeerId ?? this.localPeerId,
       roomId: roomId ?? this.roomId,
@@ -89,6 +64,8 @@ class SessionController extends StateNotifier<SessionState> {
   final Ref _ref;
   StreamSubscription<SignalingMessage>? _signalingSubscription;
   StreamSubscription<RTCPeerConnectionState>? _webrtcStateSubscription;
+  WebrtcStatsCollector? _statsCollector;
+  StreamSubscription<StreamTelemetry>? _telemetrySubscription;
 
   SessionController(this._ref) : super(SessionState()) {
     final webrtcManager = _ref.read(webrtcPeerConnectionManagerProvider);
@@ -134,7 +111,34 @@ class SessionController extends StateNotifier<SessionState> {
     
     if (state.connectionState != newState) {
       state = state.copyWith(connectionState: newState);
+      
+      if (newState == AppConnectionState.connected) {
+        _startTelemetry();
+      } else if (newState == AppConnectionState.disconnected || newState == AppConnectionState.error) {
+        _stopTelemetry();
+      }
     }
+  }
+
+  void _startTelemetry() {
+    final webrtcManager = _ref.read(webrtcPeerConnectionManagerProvider);
+    if (webrtcManager.peerConnection == null) return;
+    
+    _statsCollector = WebrtcStatsCollector(webrtcManager.peerConnection!);
+    _telemetrySubscription = _statsCollector!.onStatsUpdated.listen((telemetry) {
+      state = state.copyWith(telemetry: telemetry);
+      
+      if (state.role == StreamRole.receiver) {
+        _ref.read(adaptiveBitrateControllerProvider).evaluateReceiverTelemetry(telemetry);
+      }
+    });
+    _statsCollector!.startPolling();
+  }
+
+  void _stopTelemetry() {
+    _telemetrySubscription?.cancel();
+    _statsCollector?.dispose();
+    _statsCollector = null;
   }
 
   void initializeSession(StreamRole role, {String? serverUrl, String? roomId, String? localPeerId}) {
@@ -259,16 +263,7 @@ class SessionController extends StateNotifier<SessionState> {
     );
   }
 
-  void updateMetrics({double? fps, double? bitrate, double? packetLoss, double? latency}) {
-    state = state.copyWith(
-      metrics: state.metrics.copyWith(
-        fps: fps,
-        bitrate: bitrate,
-        packetLoss: packetLoss,
-        latency: latency,
-      ),
-    );
-  }
+  // Deprecated: Telemetry is now handled internally by _startTelemetry()
 
   void logError(String error) {
     state = state.copyWith(
@@ -278,6 +273,7 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   void terminateSession() {
+    _stopTelemetry();
     _signalingSubscription?.cancel();
     _ref.read(signalingClientProvider).disconnect();
     _ref.read(screenCaptureServiceProvider).stopCapture();
@@ -286,6 +282,7 @@ class SessionController extends StateNotifier<SessionState> {
 
   @override
   void dispose() {
+    _stopTelemetry();
     _signalingSubscription?.cancel();
     _webrtcStateSubscription?.cancel();
     super.dispose();
