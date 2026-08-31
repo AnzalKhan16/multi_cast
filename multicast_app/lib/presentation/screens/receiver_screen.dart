@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../widgets/video_stream_viewport.dart';
 import '../widgets/stream_control_bar.dart';
+import '../widgets/telemetry_hud_overlay.dart';
 import '../../data/services/webrtc_peer_connection_manager.dart';
 import '../../data/services/video_renderer_manager.dart';
 import '../../presentation/controllers/session_controller.dart';
@@ -18,6 +19,7 @@ class ReceiverScreen extends ConsumerStatefulWidget {
 class _ReceiverScreenState extends ConsumerState<ReceiverScreen> {
   StreamSubscription<MediaStream>? _streamSubscription;
   bool _isConnected = false;
+  bool _showHud = false;
   RTCVideoViewObjectFit _objectFit = RTCVideoViewObjectFit.RTCVideoViewObjectFitContain;
 
   @override
@@ -80,7 +82,17 @@ class _ReceiverScreenState extends ConsumerState<ReceiverScreen> {
                   _objectFit = fit;
                 });
               },
+              onHudToggle: () {
+                setState(() {
+                  _showHud = !_showHud;
+                });
+              },
               onDisconnect: _disconnect,
+            ),
+            
+          if (_showHud && ref.watch(sessionProvider).telemetry != null)
+            TelemetryHudOverlay(
+              telemetry: ref.watch(sessionProvider).telemetry!,
             ),
             
           // Close button at top left, always visible or when hovered
