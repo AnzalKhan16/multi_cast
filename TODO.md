@@ -3,22 +3,22 @@
 ## Phase 1: Foundation and Discovery
 - [x] Set up project directory structure and basic scaffolding.
 - [x] Configure basic dependencies in `pubspec.yaml`.
-- [ ] Initialize Node.js signaling server project.
-- [ ] Implement mDNS service broadcasting on the host device.
-- [ ] Implement mDNS service discovery on client devices.
-- [ ] Create basic UI to list discovered local peers.
+- [x] Initialize Node.js signaling server project.
+- [x] Implement mDNS service broadcasting on the host device.
+- [x] Implement mDNS service discovery on client devices.
+- [x] Create basic UI to list discovered local peers.
 
 ## Phase 2: Local Signaling
-- [ ] Develop local WebSocket signaling server to route messages.
-- [ ] Implement client-side WebSocket connection and reconnection logic.
-- [ ] Define signaling message payload structure (Offer, Answer, ICE candidates).
-- [ ] Embed signaling logic within the host Flutter app (optional, for fully serverless experience) or run as a standalone local service.
+- [x] Develop local WebSocket signaling server to route messages.
+- [x] Implement client-side WebSocket connection and reconnection logic.
+- [x] Define signaling message payload structure (Offer, Answer, ICE candidates).
+- [x] Embed signaling logic within the host Flutter app (optional, for fully serverless experience) or run as a standalone local service.
 
 ## Phase 3: WebRTC Core
-- [ ] Integrate `flutter_webrtc` and establish RTCPeerConnection between two devices.
-- [ ] Handle SDP Offer/Answer lifecycle over signaling channel.
-- [ ] Handle ICE Candidate gathering and exchange.
-- [ ] Implement state management for connection statuses (Connecting, Connected, Disconnected).
+- [x] Integrate `flutter_webrtc` and establish RTCPeerConnection between two devices.
+- [x] Handle SDP Offer/Answer lifecycle over signaling channel.
+- [x] Handle ICE Candidate gathering and exchange.
+- [x] Implement state management for connection statuses (Connecting, Connected, Disconnected).
 
 ## Phase 4: Native Capture & Permissions
 - [ ] Implement desktop screen capture (Windows/macOS).
