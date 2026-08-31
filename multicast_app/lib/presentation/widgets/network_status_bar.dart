@@ -54,4 +54,3 @@ class NetworkStatusBar extends StatelessWidget {
     );
   }
 }
-  

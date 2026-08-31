@@ -43,6 +43,8 @@ class DesktopCaptureService implements BaseDesktopCapturer {
     };
 
     try {
+      // NOTE: maxBitrate is usually applied on the RTCRtpSender after connection
+      // For now, we return the stream as acquired.
       final stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
       return stream;
     } catch (e) {

@@ -1,15 +1,52 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../widgets/network_status_bar.dart';
 import '../widgets/device_card.dart';
+import '../controllers/discovery_controller.dart';
+import '../../core/enums/device_type.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Start discovery when screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(discoveryProvider.notifier).startDiscovery();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final discoveryState = ref.watch(discoveryProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('MultiCast'),
+        actions: [
+          if (discoveryState.isDiscovering)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () {
+                ref.read(discoveryProvider.notifier).startDiscovery();
+              },
+            ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -54,33 +91,50 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 32),
-              Text(
-                'Discovered Peers',
-                style: Theme.of(context).textTheme.titleLarge,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Discovered Peers',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  Text(
+                    '${discoveryState.discoveredPeers.length} found',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
-              // Mock list of devices
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: 3,
-                itemBuilder: (context, index) {
-                  final mockDevices = [
-                    {'name': 'Desktop-PC', 'ip': '192.168.1.101', 'type': DeviceType.windows},
-                    {'name': 'MacBook Pro', 'ip': '192.168.1.102', 'type': DeviceType.apple},
-                    {'name': 'Galaxy S23', 'ip': '192.168.1.103', 'type': DeviceType.android},
-                  ];
-                  final device = mockDevices[index];
-                  return DeviceCard(
-                    deviceName: device['name'] as String,
-                    ipAddress: device['ip'] as String,
-                    deviceType: device['type'] as DeviceType,
-                    onTap: () {
-                      // TODO: Implement connection logic
-                    },
-                  );
-                },
-              ),
+              if (discoveryState.discoveredPeers.isEmpty)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
+                    child: Text(
+                      'Searching for peers on your local network...',
+                      style: TextStyle(color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              else
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: discoveryState.discoveredPeers.length,
+                  itemBuilder: (context, index) {
+                    final peer = discoveryState.discoveredPeers[index];
+                    return DeviceCard(
+                      deviceName: peer.name,
+                      ipAddress: peer.ipAddress,
+                      deviceType: peer.deviceType,
+                      onTap: () {
+                        // TODO: Implement connection logic
+                      },
+                    );
+                  },
+                ),
             ],
           ),
         ),
