@@ -9,12 +9,14 @@ import 'package:window_manager/window_manager.dart';
 class StreamControlBar extends StatefulWidget {
   final RTCVideoViewObjectFit currentFit;
   final ValueChanged<RTCVideoViewObjectFit> onFitToggle;
+  final VoidCallback onHudToggle;
   final VoidCallback onDisconnect;
 
   const StreamControlBar({
     super.key,
     required this.currentFit,
     required this.onFitToggle,
+    required this.onHudToggle,
     required this.onDisconnect,
   });
 
@@ -127,6 +129,15 @@ class _StreamControlBarState extends State<StreamControlBar> {
                       onPressed: () {
                         _startHideTimer();
                         _toggleFullscreen();
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    IconButton(
+                      icon: const Icon(Icons.info_outline, color: Colors.white),
+                      tooltip: 'Toggle HUD',
+                      onPressed: () {
+                        _startHideTimer();
+                        widget.onHudToggle();
                       },
                     ),
                     const SizedBox(width: 16),
