@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class MobileCaptureService {
   MediaStream? _currentStream;
@@ -7,9 +8,12 @@ class MobileCaptureService {
   Future<MediaStream> startMobileScreenCapture({int fps = 60, int maxBitrate = 6000000}) async {
     // Stop any existing stream before starting a new one
     await stopCapture();
+    
+    final micStatus = await Permission.microphone.request();
+    final bool hasAudio = micStatus.isGranted;
 
     final Map<String, dynamic> mediaConstraints = {
-      'audio': true, // Android 10+ supports internal audio capture via MediaProjection
+      'audio': hasAudio, // Android 10+ supports internal audio capture via MediaProjection
       'video': {
         'mandatory': {
           'minFrameRate': fps,
