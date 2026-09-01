@@ -5,6 +5,13 @@ import '../widgets/network_status_bar.dart';
 import '../widgets/device_card.dart';
 import '../controllers/discovery_controller.dart';
 import '../../core/enums/device_type.dart';
+import '../../core/enums/stream_role.dart';
+import '../controllers/session_controller.dart';
+import '../widgets/source_selector_dialog.dart';
+import '../../data/services/screen_capture_service.dart';
+import '../../data/models/peer_device.dart';
+import 'sender_screen.dart';
+import 'receiver_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +28,79 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(discoveryProvider.notifier).startDiscovery();
     });
+  }
+
+  void _showConnectionDialog(BuildContext context, PeerDevice peer, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.screen_share),
+                title: const Text('Cast to Peer'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  
+                  final captureService = ref.read(screenCaptureServiceProvider);
+                  var source;
+                  if (captureService.isDesktop) {
+                    source = await showSourceSelectorDialog(context);
+                    if (source == null) return; // User cancelled
+                  }
+
+                  final signalingUrl = 'ws://${peer.ipAddress}:8080';
+                  final localIp = ref.read(discoveryProvider).localIp ?? 'sender_${DateTime.now().millisecondsSinceEpoch}';
+                  
+                  ref.read(sessionProvider.notifier).initializeSession(
+                    StreamRole.sender,
+                    serverUrl: signalingUrl,
+                    roomId: 'room_1', // Default room
+                    localPeerId: localIp,
+                  );
+
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => SenderScreen(
+                        targetPeer: peer,
+                        captureSource: source,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.connected_tv),
+                title: const Text('Receive Stream'),
+                onTap: () {
+                  Navigator.pop(context);
+                  
+                  final signalingUrl = 'ws://${peer.ipAddress}:8080';
+                  final localIp = ref.read(discoveryProvider).localIp ?? 'receiver_${DateTime.now().millisecondsSinceEpoch}';
+                  
+                  ref.read(sessionProvider.notifier).initializeSession(
+                    StreamRole.receiver,
+                    serverUrl: signalingUrl,
+                    roomId: 'room_1',
+                    localPeerId: localIp,
+                  );
+
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ReceiverScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -77,7 +157,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        // TODO: Implement share screen action
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please select a peer from the list below to cast.')),
+                        );
                       },
                       icon: const Icon(Icons.screen_share),
                       label: const Text('Share My Screen'),
@@ -90,7 +172,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        // TODO: Implement join screen action
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please select a peer from the list below to receive a stream.')),
+                        );
                       },
                       icon: const Icon(Icons.connected_tv),
                       label: const Text('Join a Screen'),
@@ -141,7 +225,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ipAddress: peer.ipAddress,
                       deviceType: peer.deviceType,
                       onTap: () {
-                        // TODO: Implement connection logic
+                        _showConnectionDialog(context, peer, ref);
                       },
                     );
                   },
