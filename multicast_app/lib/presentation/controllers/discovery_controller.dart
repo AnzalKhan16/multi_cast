@@ -3,6 +3,7 @@ import '../../data/models/peer_device.dart';
 import '../../data/services/network_info_service.dart';
 import '../../data/services/mdns_broadcast_service.dart';
 import '../../data/services/mdns_discovery_service.dart';
+import '../../data/services/local_signaling_server.dart';
 
 final networkInfoServiceProvider = Provider((ref) => NetworkInfoService());
 final mdnsBroadcastServiceProvider = Provider((ref) => MdnsBroadcastService());
@@ -65,6 +66,9 @@ class DiscoveryController extends StateNotifier<DiscoveryState> {
     state = state.copyWith(isDiscovering: true, clearError: true);
     
     try {
+      // Start the local signaling server to broker P2P connections directly
+      await _ref.read(localSignalingServerProvider).start(port: 8080);
+      
       // Typically, deviceName is fetched from preferences or device_info_plus.
       // We use a fallback name for now.
       await _ref.read(mdnsBroadcastServiceProvider).startBroadcasting(
@@ -73,7 +77,7 @@ class DiscoveryController extends StateNotifier<DiscoveryState> {
         signalingPort: 8080,
       );
     } catch (e) {
-      print('Broadcast failed to start: $e');
+      print('Broadcast or Signaling Server failed to start: $e');
     }
 
     _discoveryService ??= MdnsDiscoveryService(
@@ -88,6 +92,8 @@ class DiscoveryController extends StateNotifier<DiscoveryState> {
   Future<void> stopDiscovery() async {
     await _ref.read(mdnsBroadcastServiceProvider).stopBroadcasting();
     await _discoveryService?.stopDiscovery();
+    // Stop the local signaling server
+    await _ref.read(localSignalingServerProvider).stop();
     state = state.copyWith(isDiscovering: false);
   }
 
