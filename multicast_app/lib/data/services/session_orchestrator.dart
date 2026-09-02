@@ -1,16 +1,15 @@
 ﻿import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
+import '../../core/enums/connection_state.dart';
 import '../../core/enums/stream_role.dart';
 import '../../presentation/controllers/session_controller.dart';
+import '../../presentation/controllers/discovery_controller.dart';
 import '../models/capture_source.dart';
 import '../models/peer_device.dart';
 import 'local_signaling_server.dart';
-import 'mdns_broadcast_service.dart';
-import 'mdns_discovery_service.dart';
 import 'screen_capture_service.dart';
-import 'signaling_client.dart';
 import 'webrtc_peer_connection_manager.dart';
 
 class SessionOrchestrator {
@@ -20,20 +19,26 @@ class SessionOrchestrator {
 
   SessionOrchestrator(this._ref);
 
+  String _generatePeerId(String prefix) {
+    final random = Random().nextInt(999999);
+    return '${prefix}_${DateTime.now().millisecondsSinceEpoch}_$random';
+  }
+
   /// Starts a full broadcasting session from end-to-end
   Future<void> startBroadcastingSession(CaptureSource? source, String deviceName) async {
     final sessionController = _ref.read(sessionProvider.notifier);
     
     // 1. Initialize local state
-    final localPeerId = const Uuid().v4();
+    final localPeerId = _generatePeerId('sender');
     const roomId = 'multicast_room';
     
     // 2. Start Local Signaling Server
     final localSignaling = _ref.read(localSignalingServerProvider);
-    final port = await localSignaling.startServer();
-    
-    if (port == null) {
-      sessionController.logError('Failed to start local signaling server on any port.');
+    const port = 8080;
+    try {
+      await localSignaling.start(port: port);
+    } catch (e) {
+      sessionController.logError('Failed to start local signaling server: $e');
       return;
     }
     
@@ -50,7 +55,11 @@ class SessionOrchestrator {
 
     // 4. Start mDNS Broadcast
     final mdnsBroadcast = _ref.read(mdnsBroadcastServiceProvider);
-    await mdnsBroadcast.startBroadcast(deviceName, port);
+    await mdnsBroadcast.startBroadcasting(
+      deviceName: deviceName,
+      deviceType: 'desktop',
+      signalingPort: port,
+    );
 
     // 5. Start Screen Capture & Add to WebRTC (we don't create offer until a receiver joins)
     try {
@@ -70,7 +79,7 @@ class SessionOrchestrator {
     final sessionController = _ref.read(sessionProvider.notifier);
     
     // 1. Initialize local state
-    final localPeerId = const Uuid().v4();
+    final localPeerId = _generatePeerId('receiver');
     const roomId = 'multicast_room'; // Default room name used by the app
     
     final serverUrl = 'ws://${targetPeer.ipAddress}:${targetPeer.port}';
@@ -107,7 +116,6 @@ class SessionOrchestrator {
         }
 
         if (_stallCount >= 3) {
-          print('Network stalled for 9 seconds. Triggering ICE Restart.');
           _stallCount = 0;
           await triggerIceRestart();
         }
@@ -144,7 +152,7 @@ class SessionOrchestrator {
         }
       }
     } catch (e) {
-      print('ICE Restart failed: $e');
+      // ICE restart error logged or handled silently
     }
   }
 
@@ -156,15 +164,14 @@ class SessionOrchestrator {
     
     // 1. Stop mDNS Broadcast
     final mdnsBroadcast = _ref.read(mdnsBroadcastServiceProvider);
-    await mdnsBroadcast.stopBroadcast();
+    await mdnsBroadcast.stopBroadcasting();
     
-    // 2. Stop mDNS Discovery (if running)
-    final mdnsDiscovery = _ref.read(mdnsDiscoveryServiceProvider);
-    mdnsDiscovery.stopDiscovery();
+    // 2. Stop Discovery
+    _ref.read(discoveryProvider.notifier).stopDiscovery();
 
     // 3. Stop Local Signaling Server (if running)
     final localSignaling = _ref.read(localSignalingServerProvider);
-    await localSignaling.stopServer();
+    await localSignaling.stop();
 
     // 4. Close WebRTC Connections & DataChannels
     final webrtcManager = _ref.read(webrtcPeerConnectionManagerProvider);
@@ -194,7 +201,7 @@ class SessionOrchestrator {
         return interfaces.first.addresses.first.address;
       }
     } catch (e) {
-      print('Failed to get local IP: $e');
+      // Fallback
     }
     return '127.0.0.1';
   }
@@ -203,3 +210,4 @@ class SessionOrchestrator {
 final sessionOrchestratorProvider = Provider<SessionOrchestrator>((ref) {
   return SessionOrchestrator(ref);
 });
+
