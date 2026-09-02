@@ -145,6 +145,33 @@ class WebrtcPeerConnectionManager {
     }
   }
 
+  /// Triggers an ICE restart to recover from connection drops
+  Future<RTCSessionDescription?> restartIce(bool isOffer) async {
+    if (_peerConnection == null) return null;
+    
+    // According to flutter_webrtc docs, we pass iceRestart in constraints
+    final constraints = {
+      'mandatory': {
+        'OfferToReceiveAudio': isOffer ? false : true,
+        'OfferToReceiveVideo': isOffer ? false : true,
+        'IceRestart': true,
+      },
+    };
+
+    RTCSessionDescription newDesc;
+    if (isOffer) {
+      newDesc = await _peerConnection!.createOffer(constraints);
+      // Re-apply SDP munging if sender
+      String optimizedSdp = SdpUtils.optimizeSdp(newDesc.sdp!);
+      newDesc = RTCSessionDescription(optimizedSdp, newDesc.type);
+    } else {
+      newDesc = await _peerConnection!.createAnswer(constraints);
+    }
+
+    await _peerConnection!.setLocalDescription(newDesc);
+    return newDesc;
+  }
+
   /// Adds local video and audio tracks from a MediaStream to the RTCPeerConnection
   Future<void> addLocalStream(MediaStream stream) async {
     if (_peerConnection == null) return;
