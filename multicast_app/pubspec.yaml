@@ -1,4 +1,4 @@
-name: multicast_app
+﻿name: multicast_app
 description: A high-performance local peer-to-peer screen sharing application.
 publish_to: 'none'
 
@@ -12,7 +12,7 @@ dependencies:
     sdk: flutter
   
   # WebRTC Engine
-  flutter_webrtc: ^0.10.4
+  flutter_webrtc: ^0.11.7
   
   # Local Network Discovery
   bonsoir: ^3.0.0

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/enums/stream_role.dart';
 import '../../core/enums/connection_state.dart';
@@ -263,7 +263,17 @@ class SessionController extends StateNotifier<SessionState> {
     );
   }
 
-  // Deprecated: Telemetry is now handled internally by _startTelemetry()
+  void updateMetrics({double? fps, double? bitrate, double? packetLoss, double? latency}) {
+    final current = state.telemetry ?? const StreamTelemetry();
+    state = state.copyWith(
+      telemetry: current.copyWith(
+        fps: fps,
+        bitrateKbps: bitrate,
+        packetsLost: packetLoss?.toInt(),
+        latencyMs: latency,
+      ),
+    );
+  }
 
   void logError(String error) {
     state = state.copyWith(
@@ -292,3 +302,4 @@ class SessionController extends StateNotifier<SessionState> {
 final sessionProvider = StateNotifierProvider<SessionController, SessionState>((ref) {
   return SessionController(ref);
 });
+

@@ -4,7 +4,6 @@ import '../../core/theme/theme_provider.dart';
 import '../widgets/network_status_bar.dart';
 import '../widgets/device_card.dart';
 import '../controllers/discovery_controller.dart';
-import '../../core/enums/device_type.dart';
 import '../../core/enums/stream_role.dart';
 import '../controllers/session_controller.dart';
 import '../widgets/source_selector_dialog.dart';
