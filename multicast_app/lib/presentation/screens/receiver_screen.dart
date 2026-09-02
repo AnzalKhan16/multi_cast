@@ -61,6 +61,25 @@ class _ReceiverScreenState extends ConsumerState<ReceiverScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final sessionState = ref.watch(sessionProvider);
+    _isConnected = sessionState.connectionState == AppConnectionState.connected;
+
+    ref.listen<SessionState>(sessionProvider, (previous, next) {
+      if (previous?.errorLogs.length != next.errorLogs.length && next.errorLogs.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${next.errorLogs.last}'),
+            backgroundColor: Colors.redAccent,
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    });
+
     final rendererManager = ref.watch(videoRendererManagerProvider);
     final renderer = rendererManager.renderer;
 

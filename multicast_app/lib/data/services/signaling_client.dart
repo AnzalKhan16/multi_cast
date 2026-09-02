@@ -10,6 +10,12 @@ class SignalingClient {
   Timer? _pongTimeoutTimer;
   static const Duration _heartbeatInterval = Duration(seconds: 10);
   static const Duration _pongTimeout = Duration(seconds: 5);
+  
+  // Reconnection logic
+  String? _lastServerUrl;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectAttempts = 5;
+  Timer? _reconnectTimer;
 
   final _messageController = StreamController<SignalingMessage>.broadcast();
   Stream<SignalingMessage> get messageStream => _messageController.stream;
@@ -17,9 +23,14 @@ class SignalingClient {
   bool get isConnected => _channel != null;
 
   /// Connects to the signaling server via WebSocket.
-  void connect(String serverUrl) {
+  void connect(String serverUrl, {bool isReconnect = false}) {
+    if (!isReconnect) {
+      _reconnectAttempts = 0;
+      _lastServerUrl = serverUrl;
+    }
+    
     if (_channel != null) {
-      disconnect();
+      disconnect(isIntentional: true); // Clean disconnect before reconnecting
     }
 
     try {
@@ -49,21 +60,45 @@ class SignalingClient {
           print('Signaling socket error: $error');
           _messageController.add(SignalingMessage(
             type: SignalingMessageType.error,
-            errorMessage: error.toString(),
+            errorMessage: 'Signaling connection lost. Attempting to reconnect...',
           ));
-          disconnect();
+          disconnect(isIntentional: false);
+          _attemptReconnect();
         },
         onDone: () {
           print('Signaling socket closed.');
-          disconnect();
+          disconnect(isIntentional: false);
+          _attemptReconnect();
         },
       );
       print('Connected to signaling server at $serverUrl');
+      _reconnectAttempts = 0; // Reset on success
       _startHeartbeat();
     } catch (e) {
       print('Failed to connect to signaling server: $e');
-      rethrow;
+      if (!isReconnect) rethrow;
     }
+  }
+
+  void _attemptReconnect() {
+    if (_lastServerUrl == null) return;
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      _messageController.add(SignalingMessage(
+        type: SignalingMessageType.error,
+        errorMessage: 'Failed to reconnect to signaling server after $_maxReconnectAttempts attempts.',
+      ));
+      return;
+    }
+
+    // Exponential backoff: 2s, 4s, 8s, 16s, 32s
+    final delay = Duration(seconds: 2 * (1 << _reconnectAttempts));
+    _reconnectAttempts++;
+    print('Attempting reconnect $_reconnectAttempts/$_maxReconnectAttempts in ${delay.inSeconds}s...');
+    
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, () {
+      connect(_lastServerUrl!, isReconnect: true);
+    });
   }
 
   void _startHeartbeat() {
@@ -73,7 +108,8 @@ class SignalingClient {
       
       _pongTimeoutTimer = Timer(_pongTimeout, () {
         print('Pong timeout! Connection lost over local Wi-Fi.');
-        disconnect();
+        disconnect(isIntentional: false);
+        _attemptReconnect();
       });
     });
   }
@@ -134,7 +170,13 @@ class SignalingClient {
   }
 
   /// Gracefully closes socket sinks and cleans up active subscriptions.
-  void disconnect() {
+  void disconnect({bool isIntentional = true}) {
+    if (isIntentional) {
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
+      _lastServerUrl = null;
+    }
+    
     _stopHeartbeat();
     _subscription?.cancel();
     _subscription = null;

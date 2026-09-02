@@ -166,5 +166,3 @@ class _SenderScreenState extends ConsumerState<SenderScreen> {
     );
   }
 }
-
-
