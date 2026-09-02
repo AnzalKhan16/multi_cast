@@ -1,18 +1,22 @@
+﻿import 'dart:async';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/enums/stream_role.dart';
+import '../../presentation/controllers/session_controller.dart';
 import '../models/capture_source.dart';
 import '../models/peer_device.dart';
+import 'local_signaling_server.dart';
 import 'mdns_broadcast_service.dart';
 import 'mdns_discovery_service.dart';
 import 'screen_capture_service.dart';
+import 'signaling_client.dart';
 import 'webrtc_peer_connection_manager.dart';
-import '../../presentation/controllers/session_controller.dart';
-import 'local_signaling_server.dart';
-import 'package:uuid/uuid.dart';
-import 'dart:io';
 
 class SessionOrchestrator {
   final Ref _ref;
+  Timer? _stallMonitorTimer;
+  int _stallCount = 0;
 
   SessionOrchestrator(this._ref);
 
@@ -22,7 +26,7 @@ class SessionOrchestrator {
     
     // 1. Initialize local state
     final localPeerId = const Uuid().v4();
-    final roomId = 'multicast_room';
+    const roomId = 'multicast_room';
     
     // 2. Start Local Signaling Server
     final localSignaling = _ref.read(localSignalingServerProvider);
@@ -67,7 +71,7 @@ class SessionOrchestrator {
     
     // 1. Initialize local state
     final localPeerId = const Uuid().v4();
-    final roomId = 'multicast_room'; // Default room name used by the app
+    const roomId = 'multicast_room'; // Default room name used by the app
     
     final serverUrl = 'ws://${targetPeer.ipAddress}:${targetPeer.port}';
 
@@ -82,12 +86,72 @@ class SessionOrchestrator {
     // Bind remote peer early so signaling messages know who to talk to
     sessionController.bindRemotePeer(targetPeer);
 
-    // Wait for the WebRTC connection state to process the offer/answer
-    // The session_controller already listens to incoming offers and will generate the answer.
+    // Start stall monitoring for resilient recovery
+    _startStallMonitor();
+  }
+
+  void _startStallMonitor() {
+    _stallMonitorTimer?.cancel();
+    _stallCount = 0;
+    
+    _stallMonitorTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      final sessionState = _ref.read(sessionProvider);
+      if (sessionState.connectionState != AppConnectionState.connected) return;
+      
+      final telemetry = sessionState.telemetry;
+      if (telemetry != null) {
+        if (telemetry.packetsLost > 50 || telemetry.fps == 0) {
+          _stallCount++;
+        } else {
+          _stallCount = 0;
+        }
+
+        if (_stallCount >= 3) {
+          print('Network stalled for 9 seconds. Triggering ICE Restart.');
+          _stallCount = 0;
+          await triggerIceRestart();
+        }
+      }
+    });
+  }
+
+  /// Triggers an ICE restart across WebRTC peer connections and signals the remote peer
+  Future<void> triggerIceRestart() async {
+    final webrtcManager = _ref.read(webrtcPeerConnectionManagerProvider);
+    final sessionState = _ref.read(sessionProvider);
+    final signalingClient = _ref.read(signalingClientProvider);
+    
+    if (sessionState.remotePeer == null || sessionState.localPeerId == null) return;
+
+    try {
+      if (sessionState.role == StreamRole.sender) {
+        final offer = await webrtcManager.restartIce(true);
+        if (offer != null) {
+          signalingClient.sendOffer(
+            sessionState.remotePeer!.id, 
+            {'sdp': offer.sdp, 'type': offer.type}, 
+            sessionState.localPeerId!,
+          );
+        }
+      } else if (sessionState.role == StreamRole.receiver) {
+        final offer = await webrtcManager.restartIce(true);
+        if (offer != null) {
+          signalingClient.sendOffer(
+            sessionState.remotePeer!.id, 
+            {'sdp': offer.sdp, 'type': offer.type}, 
+            sessionState.localPeerId!,
+          );
+        }
+      }
+    } catch (e) {
+      print('ICE Restart failed: $e');
+    }
   }
 
   /// Gracefully terminates all ongoing capture, signaling, discovery, and connections
   Future<void> endCurrentSession() async {
+    _stallMonitorTimer?.cancel();
+    
     final sessionController = _ref.read(sessionProvider.notifier);
     
     // 1. Stop mDNS Broadcast

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../widgets/telemetry_hud_overlay.dart';
 import '../../presentation/controllers/session_controller.dart';
@@ -33,6 +33,24 @@ class _SenderScreenState extends ConsumerState<SenderScreen> {
   Widget build(BuildContext context) {
     final sessionState = ref.watch(sessionProvider);
     final telemetry = sessionState.telemetry;
+
+    ref.listen<SessionState>(sessionProvider, (previous, next) {
+      if (previous?.errorLogs.length != next.errorLogs.length && next.errorLogs.isNotEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${next.errorLogs.last}'),
+              backgroundColor: Colors.redAccent,
+              action: SnackBarAction(
+                label: 'Dismiss',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
+            ),
+          );
+        }
+      }
+    });
     final isBroadcasting = sessionState.connectionState == AppConnectionState.connected || 
                            sessionState.connectionState == AppConnectionState.connecting;
     
@@ -146,3 +164,4 @@ class _SenderScreenState extends ConsumerState<SenderScreen> {
   }
 
 }
+
