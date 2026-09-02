@@ -1,6 +1,7 @@
-class NetworkConstants {
+﻿class NetworkConstants {
   static const String mdnsServiceName = '_multicast._tcp';
   static const int defaultSignalingPort = 8080;
+  static const String defaultSignalingUrl = 'wss://multicast-signaling.onrender.com';
   
   // TXT Record Keys
   static const String txtKeyDeviceName = 'deviceName';
