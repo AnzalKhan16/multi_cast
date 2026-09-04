@@ -9,6 +9,8 @@ import '../controllers/session_controller.dart';
 import '../widgets/source_selector_dialog.dart';
 import '../../data/services/screen_capture_service.dart';
 import '../../data/models/peer_device.dart';
+import '../../data/services/supabase_room_service.dart';
+import '../../core/constants/app_constants.dart';
 import 'sender_screen.dart';
 import 'receiver_screen.dart';
 
@@ -20,6 +22,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _supabaseRoomService = SupabaseRoomService();
+
   @override
   void initState() {
     super.initState();
@@ -229,6 +233,79 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     );
                   },
                 ),
+                
+              const SizedBox(height: 32),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Active Cloud Streams',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              StreamBuilder<List<Map<String, dynamic>>>(
+                stream: _supabaseRoomService.getActiveRoomsStream(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(child: Text('Error loading streams: ${snapshot.error}'));
+                  }
+                  
+                  final rooms = snapshot.data ?? [];
+                  if (rooms.isEmpty) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32.0),
+                        child: Text(
+                          'No active cloud streams right now.',
+                          style: TextStyle(color: Colors.grey),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  }
+                  
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: rooms.length,
+                    itemBuilder: (context, index) {
+                      final room = rooms[index];
+                      return Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.cloud_circle, color: Colors.blue),
+                          title: Text(room['title'] ?? 'MultiCast Live Screen'),
+                          subtitle: Text('Host: ${room['host_name'] ?? 'Unknown'} • Room: ${room['room_code']}'),
+                          trailing: ElevatedButton(
+                            onPressed: () {
+                              final localIp = ref.read(discoveryProvider).localIp ?? 'receiver_${DateTime.now().millisecondsSinceEpoch}';
+                              
+                              ref.read(sessionProvider.notifier).initializeSession(
+                                StreamRole.receiver,
+                                serverUrl: AppConstants.defaultSignalingUrl,
+                                roomId: room['room_code'],
+                                localPeerId: localIp,
+                              );
+
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const ReceiverScreen(),
+                                ),
+                              );
+                            },
+                            child: const Text('Join'),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
             ],
           ),
         ),
