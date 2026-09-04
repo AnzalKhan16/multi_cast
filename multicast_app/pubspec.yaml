@@ -1,4 +1,4 @@
-﻿name: multicast_app
+name: multicast_app
 description: A high-performance local peer-to-peer screen sharing application.
 publish_to: 'none'
 
@@ -27,6 +27,9 @@ dependencies:
   device_info_plus: ^9.1.1
   permission_handler: ^11.3.0
   window_manager: ^0.5.2
+
+  # Backend & Telemetry
+  supabase_flutter: ^2.15.2
 
 dev_dependencies:
   flutter_test:
